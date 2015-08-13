@@ -61,10 +61,10 @@ struct node * find_last_daughter(struct node *p);
 void memory_error(int);
 
 
-FILE *infile = '\0';
+FILE *infile = '\0', *outfile = '\0', *total_file = '\0';
 struct node *root = '\0', *pos = '\0', *new_node = '\0', *tmp_pos = '\0';
-char c = '\0', *OTU_name = '\0', *present_name = '\0', *present_pid = '\0';
-int found=FALSE, cutoff=0, i=0, j=0, pid=0;
+char c = '\0', *OTU_name = '\0', *present_name = '\0', *present_pid = '\0', **otu_names = '\0', number[100];
+int found=FALSE, cutoff=0, i=0, j=0, pid=0, num_otus, *otu_totals = '\0', value=0;
 
 	
 int main(int argc, char *argv[])
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 
 if(argc < 3)
     {
-    printf(" the usage of this program is:\n\n\nRDP_to_JSON RDP.file %cutoff\n\n");
+    printf(" the usage of this program is:\n\n\nRDP_to_JSON RDP.file otu_count.file %cutoff\n\n");
     exit(1);
     }
 
@@ -86,12 +86,77 @@ OTU_name[0] = present_name[0] = present_pid[0] = '\0';
 
 /* 1) open the RDP file */
 if((infile = fopen(argv[1], "r")) == '\0')		/* check to see if the file is there */
-	{								/* Open the source tree file */
+	{								
+	printf("Error: Cannot open file %s\n", argv[1]);
+	exit(1);
+	}
+if((outfile = fopen("taxonomy.json", "w")) == '\0')		/* check to see if the file is there */
+	{								
+	printf("Error: Cannot open file taxonomy.json\n");
+	exit(1);
+	}
+if((total_file = fopen(argv[2], "r")) == '\0')		/* check to see if the file is there */
+	{								
 	printf("Error: Cannot open file %s\n", argv[2]);
 	exit(1);
 	}
-cutoff=atoi(argv[2]);
+cutoff=atoi(argv[3]);
 
+num_otus =0;
+while(!feof(total_file))
+	{
+	if(c=getc(total_file) == '\n' || c == '\r') num_otus++;
+	}
+rewind(total_file);
+printf("number of OTUs = %d\n", num_otus);
+
+otu_totals = malloc(num_otus*sizeof(int));
+otu_names = malloc(num_otus*sizeof(char*));
+for(i=0; i<num_otus; i++)
+	{	
+	otu_totals[i] =0;
+	otu_names[i] = malloc(1000*sizeof(char));
+	otu_names[i][0] = '\0';
+	}
+i=0; 
+while(!feof(total_file))
+	{
+	j=0;
+	while(!feof(total_file) && (c = getc(total_file)) != '\t')
+		{
+		if(!feof(total_file))
+			{	
+			otu_names[i][j] = c;
+			j++;
+			}
+		}
+	if(!feof(total_file))
+		{		
+		otu_names[i][j]='\0';
+		printf("%s\t", otu_names[i]);
+		j=0;
+		}
+	while(!feof(total_file) && (c = getc(total_file)) != '\n' && c != '\r')
+		{	
+		if(!feof(total_file))
+			{
+			number[j]=c;
+			j++;
+			}
+		}
+	if(!feof(total_file))
+		{
+		number[j] = '\0';
+		otu_totals[i] = atoi(number);
+		printf("%d\n", otu_totals[i]);
+		/*printf("i=%d %s %d\n", i, otu_names, otu_totals);*/
+		i++;
+		}
+	}
+printf("1\n");
+
+fclose(total_file);
+printf("finished reading total file\n");
 /* read in the header information to get to the taxonomly lines */
 	found=FALSE;
 	/* read in file until blank line is found */
@@ -144,7 +209,7 @@ while(!feof(infile))
 		while(!feof(infile) && (c=getc(infile)) != ';' && c != '\n' && c != '\r')
 			{
 			present_name[i]=c;
-			i++;
+			if(c != '"') i++;
 			}
 		
 		present_name[i] = '\0';
@@ -220,12 +285,30 @@ while(!feof(infile))
 			while(!feof(infile) && (c=getc(infile)) != '\n' && c != '\r'); /* read to the end of the line skipping everything else */
 			}
 		}
+	/* now add the OTU as a child of the current position */
+	if(!feof(infile))
+		{
+		new_node = make_node();
+		strcpy(new_node->level, OTU_name);
+		if(pos->daughter != '\0') /* if this already has a daughter OTU */
+			{
+			pos = find_last_daughter(pos->daughter);
+			pos->next_sibling = new_node;
+			new_node->prev_sibling = pos;
+			}
+		else /* if this is the first daughter OTU */
+			{	
+			pos->daughter = new_node;
+			new_node->parent = pos;
+			}
+		pos = new_node;
+		}
 
 	}	
 	fclose(infile);
 /* 3) print out the tree of taxonomy as a JSON format */
 	print_JSON(root, 0);
-
+	fclose(outfile);
 /* 4) clen up the memory */
 
 
@@ -237,31 +320,45 @@ while(!feof(infile))
 void print_JSON(struct node * pos, int num_tabs)
 	{
 	int i;
-	for(i=0; i<num_tabs; i++) printf("\t");
-	printf("{\n");
-	for(i=0; i<num_tabs; i++) printf("\t");
-	printf("\"name\": \"%s\", \"size\": 100\n", pos->level);
+	for(i=0; i<num_tabs; i++) fprintf(outfile, "\t");
+	fprintf(outfile, "{\n");
+	for(i=0; i<num_tabs; i++) fprintf(outfile, "\t");
+	fprintf(outfile, "\"name\": \"%s\",", pos->level);
+	
 	if(pos->daughter != '\0')
 		{
-		for(i=0; i<num_tabs; i++) printf("\t");
-		printf("\"children\" : [\n");
+		fprintf(outfile, "\n");
+		for(i=0; i<num_tabs; i++) fprintf(outfile, "\t");
+		fprintf(outfile, "\"children\" : [\n");
 		print_JSON(pos->daughter, num_tabs+1);
-		for(i=0; i<num_tabs; i++) printf("\t");
-		printf("]\n");
+		for(i=0; i<num_tabs; i++) fprintf(outfile, "\t");
+		fprintf(outfile, "]\n");
 
 		}
-
+	else
+		{
+		value=0;
+		for(i=0; i<num_otus; i++)
+			{
+			if(strcmp(pos->level, otu_names[i]) == 0)
+				{	
+				value = otu_totals[i];
+				i=num_otus;
+				}
+			}
+		fprintf(outfile, " \"size\": %d\n", value);
+		}
 
 	if(pos->next_sibling !='\0')
 		{
-		for(i=0; i<num_tabs; i++) printf("\t");
-		printf("},\n");
+		for(i=0; i<num_tabs; i++) fprintf(outfile, "\t");
+		fprintf(outfile, "},\n");
 		print_JSON(pos->next_sibling, num_tabs);
 		}
 	else
 		{
-		for(i=0; i<num_tabs; i++) printf("\t");
-		printf("}\n");
+		for(i=0; i<num_tabs; i++) fprintf(outfile, "\t");
+		fprintf(outfile, "}\n");
 		}
 	}
 
