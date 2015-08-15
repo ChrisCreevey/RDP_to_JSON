@@ -59,6 +59,8 @@ struct node * add_node(struct node * pos, char * present_name);
 struct node * make_node(void);
 struct node * find_last_daughter(struct node *p);
 void memory_error(int);
+void free_memory(void);
+void deconstruct_tree(struct node * this);
 
 
 FILE *infile = '\0', *outfile = '\0', *total_file = '\0';
@@ -78,8 +80,14 @@ if(argc < 3)
     }
 
 OTU_name = malloc(NAME_LENGTH*sizeof(char));
+if(!OTU_name) memory_error(1);
+
 present_name = malloc(NAME_LENGTH*sizeof(char));
+if(!present_name) memory_error(2);
+
 present_pid = malloc(NAME_LENGTH*sizeof(char));
+if(!present_pid) memory_error(3);
+
 
 OTU_name[0] = present_name[0] = present_pid[0] = '\0';
 
@@ -108,14 +116,21 @@ while(!feof(total_file))
 	if(c=getc(total_file) == '\n' || c == '\r') num_otus++;
 	}
 rewind(total_file);
-printf("number of OTUs = %d\n", num_otus);
+/*printf("number of OTUs = %d\n", num_otus);*/
 
 otu_totals = malloc(num_otus*sizeof(int));
+if(!otu_totals) memory_error(4);
+
+
 otu_names = malloc(num_otus*sizeof(char*));
+if(!otu_names) memory_error(5);
+
 for(i=0; i<num_otus; i++)
 	{	
 	otu_totals[i] =0;
 	otu_names[i] = malloc(1000*sizeof(char));
+	if(!otu_names[i]) memory_error(6);
+
 	otu_names[i][0] = '\0';
 	}
 i=0; 
@@ -133,7 +148,7 @@ while(!feof(total_file))
 	if(!feof(total_file))
 		{		
 		otu_names[i][j]='\0';
-		printf("%s\t", otu_names[i]);
+		/*printf("%s\t", otu_names[i]);*/
 		j=0;
 		}
 	while(!feof(total_file) && (c = getc(total_file)) != '\n' && c != '\r')
@@ -148,15 +163,14 @@ while(!feof(total_file))
 		{
 		number[j] = '\0';
 		otu_totals[i] = atoi(number);
-		printf("%d\n", otu_totals[i]);
+		/*printf("%d\n", otu_totals[i]);*/
 		/*printf("i=%d %s %d\n", i, otu_names, otu_totals);*/
 		i++;
 		}
 	}
-printf("1\n");
 
 fclose(total_file);
-printf("finished reading total file\n");
+/*printf("finished reading total file\n");*/
 /* read in the header information to get to the taxonomly lines */
 	found=FALSE;
 	/* read in file until blank line is found */
@@ -171,6 +185,7 @@ printf("finished reading total file\n");
 	if (!found)
 		{	
 		printf("error no taxonomy information found\n");
+		free_memory();
 		exit(1);
 		}
 
@@ -213,7 +228,7 @@ while(!feof(infile))
 			}
 		
 		present_name[i] = '\0';
-		printf("present_name = %s\n", present_name);
+		/*printf("present_name = %s\n", present_name);*/
 		i=0;
 		while(!feof(infile) && (c=getc(infile)) != '%' && c != '\n' && c != '\r')
 			{
@@ -224,7 +239,7 @@ while(!feof(infile))
 
 		present_pid[i] = '\0';
 		pid = atoi(present_pid);
-		printf("present pid = %d\n", pid);
+		/*printf("present pid = %d\n", pid);*/
 		if(!feof(infile))
 			{
 			c=getc(infile); /* read the ';' after the '%' */
@@ -233,7 +248,7 @@ while(!feof(infile))
 			{	
 			if(root == '\0') /* if this is the start of the tree */
 				{
-				printf("starting tree\n");
+				/*printf("starting tree\n");*/
 				new_node = make_node();
 				strcpy(new_node->level, present_name);
 				pos = new_node;
@@ -249,10 +264,10 @@ while(!feof(infile))
 						
 						if((tmp_pos = find_name(pos->daughter, present_name)) == '\0') /* if the name is not present in the daughters */
 							{
-								printf("name doesn't exists as daughter\n");
+								/*printf("name doesn't exists as daughter\n");*/
 							new_node = make_node();
 							pos = find_last_daughter(pos->daughter);
-							printf("last daughter is %s\n", pos->level);
+							/*printf("last daughter is %s\n", pos->level);*/
 							strcpy(new_node->level, present_name);
 							pos->next_sibling = new_node;
 							new_node->prev_sibling = pos;
@@ -260,13 +275,13 @@ while(!feof(infile))
 							}
 						else
 							{
-								printf("name exists as daughter %s\n", tmp_pos->level);
+								/*printf("name exists as daughter %s\n", tmp_pos->level);*/
 							pos = tmp_pos; /* if the node already exists, then just assign the pos to be pointing to it in the tree */
 							}
 						}
 					else /* this position has no daughters */
 						{	
-							printf("name doesn't have daughters yet... creating first\n");
+							/*printf("name doesn't have daughters yet... creating first\n");*/
 						new_node = make_node();
 						strcpy(new_node->level, present_name);
 						pos->daughter = new_node;
@@ -276,7 +291,7 @@ while(!feof(infile))
 					}
 				else
 					{
-					printf("%s is present node...skipping\n", present_name );
+					/*printf("%s is present node...skipping\n", present_name );*/
 					}
 				}
 			}
@@ -371,7 +386,7 @@ struct node* find_name(struct node * pos, char * name)
 	if (strcmp(pos->level, name) == 0)
 		{
 		result=pos;
-		printf("found match\n");
+		/*printf("found match\n");*/
 		}
 	else
 		{	
@@ -390,7 +405,7 @@ struct node * add_node(struct node * pos, char * present_name)
 	struct node *new = '\0';
 
 	new = malloc(sizeof(node_type));
-	if(!new) memory_error(1);
+	if(!new) memory_error(10);
 
 	new->level[0] = '\0';
 	strcpy(new->level, present_name);
@@ -406,7 +421,7 @@ struct node * make_node(void)
 	struct node *new = '\0';
 
 	new = malloc(sizeof(node_type));
-	if(!new) memory_error(1);
+	if(!new) memory_error(11);
 
 	new->level[0] = '\0';
 	new->abundance = '\0';
@@ -426,6 +441,7 @@ struct node * make_node(void)
 void memory_error(int place)
 	{
 	printf("out of memory at %d\n", place);
+	free_memory();
 	exit(1);
 	}
 
@@ -442,6 +458,57 @@ struct node * find_last_daughter(struct node *p)
 	return(res);
 	}
 
+void free_memory(void)
+	{
+	if(OTU_name != '\0')
+		{
+		free(OTU_name);
+		OTU_name = '\0';
+		}
+	if(present_name != '\0')
+		{
+		free(present_name);
+		present_name = '\0';
+		}
+	if(present_pid != '\0')
+		{
+		free(present_pid);
+		present_pid = '\0';
+		}
+	if(otu_names != '\0')
+		{
+		for(i=0; i<num_otus; i++)
+			{
+			if(otu_names[i] != '\0')
+				{	
+				free(otu_names[i]);
+				otu_names[i] = '\0';
+				}
+			}
+		otu_names = '\0';
+		}
+	if(otu_totals != '\0')
+		{
+		free(otu_totals);
+		otu_totals = '\0';
+		}
+	if(root!= '\0')
+		{
+		deconstruct_tree(root);
+		root = '\0';
+		}
+	}
+
+void deconstruct_tree(struct node * this)
+	{
+	if(this->daughter != '\0')
+		deconstruct_tree(this->daughter);
+	if(this->next_sibling != '\0')
+		deconstruct_tree(this->next_sibling);
+
+	free(this);
+	this='\0';
+	}
 
 
 
